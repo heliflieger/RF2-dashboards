@@ -194,7 +194,7 @@ local function state_WAIT_FOR_CONNECTION_INIT(wgt)
 end
 
 local function state_WAIT_FOR_CONNECTION(wgt)
-    log("STATE.state_WAIT_FOR_CONNECTION")
+    log("\nSTATE.state_WAIT_FOR_CONNECTION")
     if wgt.is_telem == false then
         return
     end

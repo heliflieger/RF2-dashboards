@@ -1,13 +1,13 @@
 rf2 = {
     baseDir = "/SCRIPTS/RF2-dashboards/",
-    app_ver = "2.2.0",
+    app_ver = "2.2.1",
     runningInSimulator = string.sub(select(2, getVersion()), -4) == "simu",
     enable_serial_debug = false,
     enable_log_to_file = false,
 
     log_to_file = function(str)
         if not rf2.logfile then
-            rf2.logfile = io.open("/LOGS/rf2.log", "a")
+            rf2.logfile = io.open("/rf2-dashboard.log", "a")
         end
         -- write only if LOGS dir exist (diferent from LOG)
         if rf2.logfile then

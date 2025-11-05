@@ -866,7 +866,6 @@ end
 local function updateOnNoConnection()
     wgt.values.arm_disable_flags_txt = ""
     wgt.values.arm_fail = false
-
 end
 
 ---------------------------------------------------------------------------------------
@@ -912,7 +911,8 @@ local function background(wgt)
         updateELRS(wgt)
     end
 
-    wgt.is_connected, wgt.not_connected_error = false, "no RF2_Server widget found"
+    wgt.is_connected = false
+    wgt.not_connected_error = "no RF2_Server widget found"
     if rf2fc == nil then
         updateOnNoConnection()
         return
