@@ -14,6 +14,7 @@ local mspTxIdx = 1
 local mspTxCRC = 0
 
 local protocolScript = "MSP/" .. rf2.executeScript("protocols")
+--rf2.log("protocolScript: %s",protocolScript)
 local mspSend, mspPoll, telemetryPush, maxTxBufferSize, maxRxBufferSize = rf2.executeScript(protocolScript)
 
 local function mspProcessTxQ()
@@ -127,7 +128,7 @@ end
 
 local function mspPollReply()
     local startTime = rf2.clock()
-    while (rf2.clock() - startTime < 0.05) do
+    while (rf2.clock() - startTime < 0.005) do -- was 0.05, but this cause CPU-LIMIT on Tx15s
         local mspData = mspPoll()
         if mspData ~= nil and mspReceivedReply(mspData) then
             mspLastReq = 0

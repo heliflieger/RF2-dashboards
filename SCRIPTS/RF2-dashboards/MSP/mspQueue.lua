@@ -43,45 +43,55 @@ local function popFirstElement(tbl)
 end
 
 function MspQueueController:processQueue()
+    -- rf2.log("processQueue()-------")
     if self:isProcessed() then
+        -- rf2.log("Queue is empty")
         return
     end
 
     if not self.currentMessage then
         self.currentMessage = popFirstElement(self.messageQueue)
         self.retryCount = 0
+        -- rf2.log("[msp][cmd:%s] command poped from queue", self.currentMessage.command)
     end
 
     if self.currentMessage.postSendDelay and self.currentMessage.buf then
-        if self.lastTimeCommandSent + self.currentMessage.postSendDelay > rf2.clock() then return end
+        if self.lastTimeCommandSent + self.currentMessage.postSendDelay > rf2.clock() then
+            rf2.log("Waiting for postSendDelay to expire...???")
+            return
+        end
+        -- rf2.log("postSendDelay expired, processing reply???")
         self:handleReply()
         return
     end
 
     local cmd, buf, err
-    --rf2.print("retryCount: "..self.retryCount)
+    -- rf2.print("retryCount: %s/%s", self.retryCount, self.maxRetries)
 
     local retryDelay = 0.8 + (self.currentMessage.postSendDelay or 0)
+    -- rf2.log("retryDelay: %s", retryDelay)
+
     if not rf2.runningInSimulator then
         if not self.lastTimeCommandSent or (self.lastTimeCommandSent + retryDelay < rf2.clock()) then
             if self.currentMessage.payload then
-                --rf2.print("Sending  cmd "..self.currentMessage.command..": {" .. joinTableItems(self.currentMessage.payload, ", ") .. "}")
+                -- rf2.print("[msp][cmd:%s] Sending... (payload: {%s})",self.currentMessage.command, joinTableItems(self.currentMessage.payload, ", "))
                 mspSendRequest(self.currentMessage.command, self.currentMessage.payload)
             else
-                --rf2.print("Sending  cmd "..self.currentMessage.command)
+                -- rf2.print("[msp][cmd:%s] Sending...", self.currentMessage.command)
                 mspSendRequest(self.currentMessage.command, {})
             end
             self.lastTimeCommandSent = rf2.clock()
             self.retryCount = self.retryCount + 1
         end
+        -- rf2.print("[msp][cmd:%s] cmd still processing", self.currentMessage.command)
 
         mspProcessTxQ()
         cmd, buf, err = mspPollReply()
     --[NIR
     else
-        --rf2.print("Sending  cmd "..self.currentMessage.command..": {" .. joinTableItems(self.currentMessage.payload, ", ") .. "}")
+        -- rf2.log("Sending  cmd: %s, : %s}", self.currentMessage.command, joinTableItems(self.currentMessage.payload, ", "))
         if not self.currentMessage.simulatorResponse then
-            --rf2.print("No simulator response for command "..tostring(self.currentMessage.command))
+            -- rf2.log("No simulator response for command: %s", self.currentMessage.command)
             self.currentMessage = nil
             return
         end
@@ -107,7 +117,7 @@ function MspQueueController:processQueue()
     --end
 
     if (cmd == self.currentMessage.command and not err) or (self.currentMessage.command == 68 and self.retryCount == 2) then -- 68 = MSP_REBOOT
-        --rf2.print("Received cmd "..self.currentMessage.command..": {" .. joinTableItems(buf, ", ") .. "}")
+        rf2.log("Received cmd "..cmd..": {" .. joinTableItems(buf, ", ") .. "}")
         self.currentMessage.buf = buf
         if self.currentMessage.postSendDelay then return end
         self:handleReply()
@@ -155,7 +165,7 @@ end
 
 function MspQueueController:add(message, copy)
     if copy then message = deepCopy(message) end
-    --rf2.print("Queueing command "..message.command.." at position "..#self.messageQueue + 1)
+    rf2.print("[msp][cmd:%s] Queueing command (at position %s)", message.command, #self.messageQueue + 1)
     self.messageQueue[#self.messageQueue + 1] =  message
     return self
 end
