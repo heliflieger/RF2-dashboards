@@ -251,7 +251,7 @@ end
 local replImg = 0
 local imgTp = 0
 local function updateCraftName(wgt)
-    local is_dbg_craft_change = true
+    local is_dbg_craft_change = false
 
     if is_dbg_craft_change == true then
         if (rf2.clock() - replImg > 5) then
