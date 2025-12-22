@@ -92,10 +92,10 @@ end
 
 local function initialize(modelIsConnected)
     rf2.log("background_init.initialize()")
-    if rf2.runningInSimulator then
-        crsfCustomTelemetryEnabled = true
-        return true
-    end
+    -- if rf2.runningInSimulator then
+    --     crsfCustomTelemetryEnabled = true
+    --     return true
+    -- end
     local sensorsDiscoveryWaitState = waitForCrsfSensorsDiscovery()
     if sensorsDiscoveryWaitState == 1 then
         return false
