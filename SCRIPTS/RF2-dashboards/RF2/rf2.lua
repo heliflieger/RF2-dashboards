@@ -1,9 +1,9 @@
 rf2 = {
-    baseDir = "/SCRIPTS/RF2-dashboards/",
-    app_ver = "2.2.1",
+    baseDir = "/SCRIPTS/RF2-dashboards/RF2/",
+    app_ver = "2.2.10",
     runningInSimulator = string.sub(select(2, getVersion()), -4) == "simu",
     enable_serial_debug = false,
-    enable_log_to_file = false,
+    enable_log_to_file  = false,
 
     log_to_file = function(str)
         if not rf2.logfile then

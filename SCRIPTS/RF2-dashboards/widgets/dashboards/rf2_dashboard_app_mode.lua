@@ -1,7 +1,6 @@
 local app_name = "RF2-dashboards"
 
-local baseDir = "/SCRIPTS/RF2-dashboards/"
-local inSimu = string.sub(select(2,getVersion()), -4) == "simu"
+-- local baseDir = "/SCRIPTS/RF2-dashboards/"
 
 -- better font size names
 local FS={FONT_38=XXLSIZE,FONT_16=DBLSIZE,FONT_12=MIDSIZE,FONT_8=0,FONT_6=SMLSIZE}

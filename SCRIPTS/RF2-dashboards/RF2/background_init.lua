@@ -34,6 +34,17 @@ local function waitForCrsfSensorsDiscovery()
     return 0
 end
 
+-- Extra life earned (1UP sound)
+-- Happy ascending melody
+function pacmanPlayExtraLife()
+  playTone(523, 120, 0, PLAY_NOW)   -- C5
+  playTone(659, 120, 0)             -- E5
+  playTone(784, 120, 0)             -- G5
+  playTone(1047, 120, 0)            -- C6
+  playTone(784, 120, 0)             -- G5
+  playTone(1047, 200, 300)          -- C6 (held)
+end
+
 local queueInitialized = false
 local function initializeQueue()
     --rf2.log("Initializing MSP queue")
@@ -70,7 +81,8 @@ local function initializeQueue()
                     --if autoSetName then
                     --    setModelName(rf2.modelName)
                     --end
-                    playTone(1600, 300, 0, PLAY_BACKGROUND)
+                    -- playTone(1600, 300, 0, PLAY_BACKGROUND)
+                    pacmanPlayExtraLife()  -- Extra life awarded
                     --rf2.print("RTC set")
                     rf2.mspQueue.maxRetries = 3
                     initializationDone = true
@@ -79,6 +91,11 @@ local function initializeQueue()
 end
 
 local function initialize(modelIsConnected)
+    rf2.log("background_init.initialize()")
+    if rf2.runningInSimulator then
+        crsfCustomTelemetryEnabled = true
+        return true
+    end
     local sensorsDiscoveryWaitState = waitForCrsfSensorsDiscovery()
     if sensorsDiscoveryWaitState == 1 then
         return false

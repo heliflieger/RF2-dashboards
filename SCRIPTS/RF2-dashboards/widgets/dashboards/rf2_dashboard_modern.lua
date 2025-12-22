@@ -6,17 +6,17 @@ local inSimu = string.sub(select(2,getVersion()), -4) == "simu"
 -- better font size names
 local FS={FONT_38=XXLSIZE,FONT_16=DBLSIZE,FONT_12=MIDSIZE,FONT_8=0,FONT_6=SMLSIZE}
 
-local lib_blackbox_horz = assert(loadScript(baseDir .. "/widgets/parts/blackbox_horz.lua"))()
+local lib_blackbox_horz = assert(loadScript(baseDir .. "/widgets/parts/blackbox_horz.lua", "btd"))()
 
 local M = {}
 
 M.build_ui = function(wgt)
     if (wgt == nil) then log("refresh(nil)") return end
+    if (wgt.options == nil) then log("refresh(wgt.options=nil)") return end
     local txtColor = wgt.options.textColor
     local titleGreyColor = LIGHTGREY
 
-    -- local ts_w, ts_h = lcd.sizeText(num_flights, font_size)
-    local dx = 20 --(zone_w - ts_w) / 2
+    local dx = 20
 
     lvgl.clear()
 
@@ -125,11 +125,10 @@ M.build_ui = function(wgt)
     local bStatusBar = pMain:box({x=0, y=wgt.zone.h-20})
     local statusBarColor = lcd.RGB(0x0078D4)
     bStatusBar:rectangle({x=0, y=0,w=wgt.zone.w, h=20, color=statusBarColor, filled=true})
-    -- bStatusBar:label({x=3  , y=2, text=function() return string.format("RQLY: %s%%   RQLY-: %s", wgt.values.rqly, wgt.values.rqly_min)) end, font=FS.FONT_6, color=WHITE})
-    bStatusBar:rectangle({x=25, y=0,w=70, h=20, color=RED, filled=true, visible=function() return (wgt.values.rqly_min < 80) end })
-    bStatusBar:label({x=3  , y=2, text=function() return string.format("elrs RQly-: %s%%", wgt.values.rqly_min) end, font=function() return (wgt.values.rqly_min >= 80) and FS.FONT_6 or FS.FONT_6  end, color=WHITE})
-    bStatusBar:label({x=120, y=2, text=function() return string.format("TPwr+: %smw", getValue("TPWR+")) end, font=FS.FONT_6, color=WHITE})
-    bStatusBar:label({x=230, y=2, text=function() return string.format("VBec-: %sv", getValue("Vbec-")) end, font=FS.FONT_6, color=WHITE})
+    bStatusBar:rectangle({x=25, y=0,w=70, h=20, color=RED, filled=true, visible=function() return (wgt.values.link_rqly < 80) end })
+    bStatusBar:label({x=3  , y=2, text=function() return string.format("elrs RQly-: %s%%", wgt.values.link_rqly_min) end, font=function() return (wgt.values.link_rqly >= 80) and FS.FONT_6 or FS.FONT_6  end, color=WHITE})
+    bStatusBar:label({x=120, y=2, text=function() return string.format("TPwr+: %smw", wgt.values.link_tx_power_max) end, font=FS.FONT_6, color=WHITE})
+    bStatusBar:label({x=230, y=2, text=function() return string.format("VBec-: %sv", wgt.values.vbec_min) end, font=FS.FONT_6, color=WHITE})
     bStatusBar:label({x=300, y=2, text=function() return string.format("Thr+: %s%%", wgt.values.thr_max) end, font=FS.FONT_6, color=WHITE})
     bStatusBar:label({x=380, y=2, text="VenbS & Shmuely", font=FS.FONT_6, color=YELLOW})
 
@@ -140,9 +139,26 @@ M.build_ui = function(wgt)
     bImageArea:rectangle({x=0, y=0, w=isizew, h=isizeh, thickness=4, rounded=15, filled=false, color=GREY})
     bImageArea:image({x=0, y=0, w=isizew, h=isizeh, fill=false,
         file=function()
-            return "/IMAGES/".. wgt.values.craft_name .. ".png"
+            return "/IMAGES/".. wgt.values.img_craft_name_for_image
         end
     })
+
+    -- flights count
+    pMain:build({{type="box", x=340, y=105,
+                    -- pos= function() return dbgx, dbgy end,
+        children={
+            {type="label", text=function() return string.format("%s Flights", wgt.values.model_total_flights or "000") end , x=0, y=0, font=FS.FONT_6 ,color=lcd.RGB(0x999999)},
+            -- {type="label", text="Flights: ", x=50, y=2, font=FS.FONT_6, color=lcd.RGB(0x999999)},
+        }
+    }})
+    -- air time
+    pMain:build({{type="box", x=420, y=105,
+        children={
+            -- {type="label", text="Air Time: ", x=0, y=2, font=FS.FONT_6, color=lcd.RGB(0x999999)},
+            -- {type="label", text=function() return wgt.values.model_total_time_str or "---" end , x=55, y=0, font=FS.FONT_6 ,color=lcd.RGB(0x999999)},
+            {type="label", text=function() return string.format("%s Min", wgt.values.model_total_time_str or "---") end , x=0, y=0, font=FS.FONT_6 ,color=lcd.RGB(0x999999)},
+        }
+    }})
 
     -- craft name
     local bCraftName = pMain:box({x=330, y=60})
@@ -150,34 +166,25 @@ M.build_ui = function(wgt)
     bCraftName:label({text=function() return wgt.values.craft_name end,  x=15, y=20, font=FS.FONT_8 ,color=txtColor})
 
     -- failed to arm flags
-    local bFailedArmFlags = pMain:box({x=100, y=25, visible=function() return wgt.values.arm_fail end})
-    bFailedArmFlags:rectangle({x=0, y=0, w=280, h=150, color=RED, filled=true, rounded=8, opacity=245})
-    bFailedArmFlags:label({text=function() return wgt.values.arm_disable_flags_txt end, x=10, y=0, font=FS.FONT_8, color=WHITE})
+    pMain:build({{type="box", x=100, y=25, visible=function() return wgt.values.arm_fail end,
+        children={
+            {type="rectangle", x=0, y=0, w=280, h=150, color=RED, filled=true, rounded=8, opacity=245},
+            {type="label", text=function()
+                return string.format("%s (%s)", wgt.values.arm_disable_flags_txt, wgt.values.arm_fail)
+            end, x=10, y=0, font=FS.FONT_8, color=WHITE},
+        }
+    }})
 
     -- no connection
-    local bNoConn = lvgl.box({x=330, y=10, visible=function() return wgt.is_connected==false end})
-    bNoConn:rectangle({x=5, y=10, w=isizew-10, h=isizeh-10, rounded=15, filled=true, color=BLACK, opacity=250})
-    bNoConn:label({x=10, y=80, text=function() return wgt.not_connected_error end , font=FS.FONT_8, color=WHITE})
-    bNoConn:image({x=30, y=0, w=90, h=90, file=baseDir.."widgets/img/no_connection_wr.png"})
-
-end
-
--------------------------------------------------------------------
-
-local function build_ui_appmode(wgt)
-    lvgl.clear()
-    local bMain = lvgl.box({x=0, y=0})
-    bMain:label({text = app_name, x=140,y=10, color=WHITE, font=FS.FONT_12})
-
-    local pg = lvgl.page({title="Rotorflight Dashboard", subtitle="Config",
-        back=close,
-        icon="/SCRIPTS/RF2-dashboards/widgets/img/rf2_logo.png",
-        -- flexFlow=lvgl.FLOW_COLUMN,
-        -- flexFlow=lvgl.FLOW_ROW,
-        -- flexPad=30,
-    })
-
+    pMain:build({{type="box", x=330, y=10, visible=function() return wgt.is_connected==false end,
+        children={
+            {type="rectangle", x=5, y=10, w=isizew-10, h=isizeh-20, rounded=15, filled=true, opacity=250, color=BLACK},
+            {type="image", x=30, y=0, w=90, h=90, file=baseDir.."widgets/img/no_connection_wr.png"},
+            {type="label", x=10, y=70, text=function() return wgt.not_connected_error end , font=FS.FONT_8, color=WHITE},
+        }
+    }})
 
 end
 
 return M
+

@@ -9,7 +9,8 @@ rf2fc = {
             msp_rx_request = false,
             mspStatus = false,
             mspName = false,
-            mspDataflash = false,
+            -- mspDataflash = false,
+            mspFlightStats = false,
             -- mspGovernorConfig = false,
             lastServerTime = 0,
             lastUpdateTime = 0,
@@ -25,13 +26,22 @@ rf2fc = {
                 profile = nil,
                 rateProfile = nil,
             },
-            mspDataflash = {
-                ready = nil,
-                supported = nil,
-                sectors = nil,
-                totalSize = nil,
-                usedSize = nil,
+            -- mspDataflash = {
+            --     ready = nil,
+            --     supported = nil,
+            --     sectors = nil,
+            --     totalSize = nil,
+            --     usedSize = nil,
+            -- },
+            mspFlightStats = {
+                stats_total_flights = {value = nil},
+                stats_total_time_s = {value = nil},
+                stats_total_dist_m = {value = nil},
+                stats_min_armed_time_s = {value = nil},
+                -- Calculated fields
+                statsEnabled = {value = nil},
             },
+
             -- mspGovernorConfig = {
             --     gov_mode = nil,
             --     gov_startup_time = nil,
@@ -92,12 +102,11 @@ rf2fc = {
     }
 }
 
-loadScript(baseDir.."rf2.lua")()
+loadScript(baseDir.."/RF2/rf2.lua", "btd")()
 rf2.enable_serial_debug = true
 
 
--- local image_file = rf2.baseDir.."/widgets/img/rf2_logo2.png"
-local image_file = rf2.baseDir.."/widgets/img/rf2_logo3.png"
+local image_file = baseDir.."/widgets/img/rf2_logo3.png"
 
 --------------------------------------------------------------
 local function log(fmt, ...)
@@ -161,8 +170,8 @@ local function create(zone, options)
         zone = zone,
         options = options
     }
-    wgt.tools = assert(rf2.loadScript("/widgets/lib_widget_tools.lua"))(nil, app_name)
-    wgt.mspCacheTools = assert(rf2.loadScript("/widgets/mspCacheTools.lua"))()
+    -- wgt.tools = assert(loadScript(baseDir .. "/widgets/lib_widget_tools.lua", "btd"))(nil, app_name)
+    wgt.mspCacheTools = assert(loadScript(baseDir .. "/widgets/mspCacheTools.lua", "btd"))()
     rf2fc.mspCacheTools = wgt.mspCacheTools
 
     return update(wgt, options)
@@ -184,11 +193,7 @@ local function state_WAIT_FOR_CONNECTION_INIT(wgt)
     rf2.mspHelper = rf2.executeScript("MSP/mspHelper.lua")
     --rf2.showMemoryUsage("MSP helper loaded")
 
-    backgroundTask = rf2.loadScript("background.lua")()
-
-    rf2.tlmEngine = rf2.loadScript("/telemetry/telemetry.lua")(rf2.runningInSimulator)
-    log("x-telemetery tlmTask: %s", rf2.tlmEngine)
-    rf2.tlmEngine.init()
+    backgroundTask = loadScript(baseDir .."/RF2/background.lua", "btd")()
 
     state = STATE.WAIT_FOR_CONNECTION
 end
@@ -321,7 +326,8 @@ local function state_RETRIVE_LIVE_INFO_INIT(wgt)
 
     rf2fc.msp.ctl.msp_rx_request = true
     rf2fc.msp.ctl.mspStatus = false
-    rf2fc.msp.ctl.mspDataflash = false
+    -- rf2fc.msp.ctl.mspDataflash = false
+    rf2fc.msp.ctl.mspFlightStats = false
 
     log("msp_rx_request: %s", rf2fc.msp.ctl.msp_rx_request)
 
@@ -354,15 +360,38 @@ local function state_RETRIVE_LIVE_INFO_INIT(wgt)
     --     rf2fc.msp.ctl.mspBatteryState = true
     -- end)
 
-    -- mspDataflash
-    rf2.useApi("mspDataflash").getDataflashSummary(function(_, ret)
+    -- -- mspDataflash
+    -- rf2.useApi("mspDataflash").getDataflashSummary(function(_, ret)
+    --     rf2fc.msp.ctl.connected = true
+    --     rf2fc.msp.ctl.lastUpdateTime = rf2.clock()
+    --     -- log("MSP> mspDataflash: %s", tableToString(ret))
+    --     rf2fc.msp.cache.mspDataflash = ret
+    --     -- log("MSP> mspDataflash total: %s, used: %s, free: %s", wgt.mspCacheTools.blackboxSize().totalSize, wgt.mspCacheTools.blackboxSize().usedSize, wgt.mspCacheTools.blackboxSize().freeSize)
+    --     rf2fc.msp.ctl.mspDataflash = true
+    -- end)
+
+    local function onReceiveFlightStat(x, config)
+        -- rf2.log("Total flights 2: [%s]", config.stats_total_flights.value)
+        -- rf2.log("Total flights 3: [%s]", rf2fc.msp.cache.mspFlightStats.stats_total_flights.value)
+
         rf2fc.msp.ctl.connected = true
         rf2fc.msp.ctl.lastUpdateTime = rf2.clock()
-        -- log("MSP> mspDataflash: %s", tableToString(ret))
-        rf2fc.msp.cache.mspDataflash = ret
-        -- log("MSP> mspDataflash total: %s, used: %s, free: %s", wgt.mspCacheTools.blackboxSize().totalSize, wgt.mspCacheTools.blackboxSize().usedSize, wgt.mspCacheTools.blackboxSize().freeSize)
-        rf2fc.msp.ctl.mspDataflash = true
-    end)
+        rf2fc.msp.ctl.mspFlightStats = true
+        log("MSP> mspFlightStats: %s", tableToString(ret))
+        log("MSP> mspFlightStats stats_total_flights: %s, stats_total_time_s: %s, stats_min_armed_time_s: %s, statsEnabled: %s",
+            rf2fc.msp.cache.mspFlightStats.stats_total_flights.value,
+            rf2fc.msp.cache.mspFlightStats.stats_total_time_s.value,
+            rf2fc.msp.cache.mspFlightStats.stats_min_armed_time_s.value,
+            rf2fc.msp.cache.mspFlightStats.statsEnabled.value)
+    end
+
+    -- flights count
+    if rf2.apiVersion >= 12.09 then
+        rf2.useApi("mspFlightStats").read(onReceiveFlightStat, self, rf2fc.msp.cache.mspFlightStats)
+    else
+        rf2fc.msp.ctl.mspFlightStats = true
+    end
+
 
     reqTS = rf2.clock()
     state = STATE.RETRIVE_LIVE_INFO
@@ -373,7 +402,8 @@ local function state_RETRIVE_LIVE_INFO(wgt)
 
     if rf2fc.msp.ctl.mspStatus == true
         -- and rf2fc.msp.ctl.mspBatteryState == true
-        and rf2fc.msp.ctl.mspDataflash == true
+        -- and rf2fc.msp.ctl.mspDataflash == true
+        and rf2fc.msp.ctl.mspFlightStats == true
     then
         rf2fc.msp.ctl.msp_rx_request = false
         -- log("[RETRIVE_LIVE_INFO] msp_rx_request: %s", rf2fc.msp.ctl.msp_rx_request)
@@ -450,7 +480,8 @@ local function background(wgt)
     --     rf2fc.msp.ctl.connected = false
     -- end
 
-    wgt.is_telem = wgt.tools.isTelemetryAvailable()
+    -- wgt.is_telem = wgt.tools.isTelemetryAvailable()
+    wgt.is_telem = (getRSSI() > 0)
     if wgt.is_telem == false then
         state = STATE.WAIT_FOR_CONNECTION_INIT
         return

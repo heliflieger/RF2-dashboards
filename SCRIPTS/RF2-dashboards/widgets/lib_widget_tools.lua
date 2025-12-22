@@ -1,4 +1,6 @@
-local m_log, app_name = ...
+local arg = {...}
+local m_log = arg[1]
+local app_name = arg[2]
 
 local M = {}
 --M.m_log = m_log
@@ -319,33 +321,70 @@ function M.drawBadgedTextCenter(txt, txtX, txtY, font_size, text_color, bg_color
     --lcd.drawLine(txtX, txtY-20, txtX, txtY+20, SOLID, RED) -- dbg
 end
 
-------------------------------------------------------------------------------------------------------
--- usage:
---log("bbb----------------------------------------------------------")
---wgt.tools.heap_dump(wgt, 0, 60)
---log("ccc----------------------------------------------------------")
-function M.heap_dump(tbl, indent, max_dept)
-    local spaces = string.rep("  ", indent)
-    if max_dept == 0 then
-        log(spaces .. "---- max dept ----")
-        return
-    end
-    max_dept = max_dept -1
-    indent = indent or 0
+-- Data gathered from commercial lipo sensors
+local percent_list_lipo = {
+    {3.000,  0},
+    {3.093,  1}, {3.196,  2}, {3.301,  3}, {3.401,  4}, {3.477,  5}, {3.544,  6}, {3.601,  7}, {3.637,  8}, {3.664,  9}, {3.679, 10},
+    {3.683, 11}, {3.689, 12}, {3.692, 13}, {3.705, 14}, {3.710, 15}, {3.713, 16}, {3.715, 17}, {3.720, 18}, {3.731, 19}, {3.735, 20},
+    {3.744, 21}, {3.753, 22}, {3.756, 23}, {3.758, 24}, {3.762, 25}, {3.767, 26}, {3.774, 27}, {3.780, 28}, {3.783, 29}, {3.786, 30},
+    {3.789, 31}, {3.794, 32}, {3.797, 33}, {3.800, 34}, {3.802, 35}, {3.805, 36}, {3.808, 37}, {3.811, 38}, {3.815, 39}, {3.818, 40},
+    {3.822, 41}, {3.825, 42}, {3.829, 43}, {3.833, 44}, {3.836, 45}, {3.840, 46}, {3.843, 47}, {3.847, 48}, {3.850, 49}, {3.854, 50},
+    {3.857, 51}, {3.860, 52}, {3.863, 53}, {3.866, 54}, {3.870, 55}, {3.874, 56}, {3.879, 57}, {3.888, 58}, {3.893, 59}, {3.897, 60},
+    {3.902, 61}, {3.906, 62}, {3.911, 63}, {3.918, 64}, {3.923, 65}, {3.928, 66}, {3.939, 67}, {3.943, 68}, {3.949, 69}, {3.955, 70},
+    {3.961, 71}, {3.968, 72}, {3.974, 73}, {3.981, 74}, {3.987, 75}, {3.994, 76}, {4.001, 77}, {4.007, 78}, {4.014, 79}, {4.021, 80},
+    {4.029, 81}, {4.036, 82}, {4.044, 83}, {4.052, 84}, {4.062, 85}, {4.074, 86}, {4.085, 87}, {4.095, 88}, {4.105, 89}, {4.111, 90},
+    {4.116, 91}, {4.120, 92}, {4.125, 93}, {4.129, 94}, {4.135, 95}, {4.145, 96}, {4.176, 97}, {4.179, 98}, {4.193, 99}, {4.200,100},
+}
 
-    for key, value in pairs(tbl) do
-        if key ~= "_G" then
-            if type(value) == "table" then
-                --log(spaces .. key .. " (table) = {")
-                log(spaces .. key .. " = {")
-                M.heap_dump(value, indent + 1, max_dept)
-                log(spaces .. "}")
+--- return the percentage remaining in a single Lipo cel
+M.getCellPercent = function(cellValue)
+    if cellValue == nil then
+        return 0
+    end
+
+    -- if voltage too low, return 0%
+    if cellValue <= percent_list_lipo[1][1] then
+        return 0
+    end
+
+    -- if voltage too high, return 100%
+    if cellValue >= percent_list_lipo[#percent_list_lipo][1] then
+        return 100
+    end
+
+    -- binary search
+    local l = 1
+    local u = #percent_list_lipo
+    while true do
+        local n = (u + l) // 2
+        if cellValue >= percent_list_lipo[n][1] and cellValue <= percent_list_lipo[n+1][1] then
+            -- return closest value
+            if cellValue < (percent_list_lipo[n][1] + percent_list_lipo[n + 1][1]) / 2 then
+                return percent_list_lipo[n][2]
             else
-                log(spaces .. key .. " = " .. tostring(value))
+                return percent_list_lipo[n+1][2]
             end
         end
+        if cellValue < percent_list_lipo[n][1] then
+            u = n
+        else
+            l = n
+        end
     end
+
+    return 0
 end
-------------------------------------------------------------------------------------------------------
+
+M.isFileExist = function(file_name)
+    -- log("is_file_exist()")
+    local hFile = io.open(file_name, "r")
+    if hFile == nil then
+        -- log("file not exist - %s", file_name)
+        return false
+    end
+    io.close(hFile)
+    -- log("file exist - %s", file_name)
+    return true
+end
 
 return M

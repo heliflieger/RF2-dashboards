@@ -10,13 +10,17 @@ local err_img = bitmap.open(baseDir.."widgets/img/no_connection_wr.png")
 local dashboard_styles = {
     [1] = "rf2_dashboard_fancy.lua",
     [2] = "rf2_dashboard_modern.lua",
-    [3] = "rf2_dashboard_capa.lua",
 }
 
 
+local runningInSimulator = string.sub(select(2, getVersion()), -4) == "simu"
+local m_clock = function()
+    return getTime() / 100
+end
+
 local wgt = {
     values = {
-        craft_name = "-------",
+        craft_name = "-----",
         timer_str = "--:--",
         rpm = -1,
         rpm_str = "---",
@@ -47,10 +51,10 @@ local wgt = {
         EscT_percent = 0,
         EscT_max_percent = 0,
 
-        rqly = 0,
-        rqly_min = 0,
-        rqly_str = 0,
-        rqly_min_str = 0,
+        link_rqly = 0,
+        link_rqly_min = 0,
+        link_rqly_str = 0,
+        link_rqly_min_str = 0,
 
         -- governor_str = "-------",
         bb_enabled = true,
@@ -63,6 +67,8 @@ local wgt = {
         arm_fail = false,
         arm_disable_flags_list = nil,
         arm_disable_flags_txt = "",
+        flight_stage = -1,
+        flight_stage_str = "---",
 
         img_last_name = "---",
         img_craft_name_for_image = "---",
@@ -73,64 +79,21 @@ local wgt = {
 
         thr = 0,
         thr_max = 0,
+
+        -- model stats
+        model_total_flights = nil,
+        model_total_time = nil,
+        model_total_time_str = "---",
     },
-
 }
 
-
--- Data gathered from commercial lipo sensors
-local percent_list_lipo = {
-    {3.000,  0},
-    {3.093,  1}, {3.196,  2}, {3.301,  3}, {3.401,  4}, {3.477,  5}, {3.544,  6}, {3.601,  7}, {3.637,  8}, {3.664,  9}, {3.679, 10},
-    {3.683, 11}, {3.689, 12}, {3.692, 13}, {3.705, 14}, {3.710, 15}, {3.713, 16}, {3.715, 17}, {3.720, 18}, {3.731, 19}, {3.735, 20},
-    {3.744, 21}, {3.753, 22}, {3.756, 23}, {3.758, 24}, {3.762, 25}, {3.767, 26}, {3.774, 27}, {3.780, 28}, {3.783, 29}, {3.786, 30},
-    {3.789, 31}, {3.794, 32}, {3.797, 33}, {3.800, 34}, {3.802, 35}, {3.805, 36}, {3.808, 37}, {3.811, 38}, {3.815, 39}, {3.818, 40},
-    {3.822, 41}, {3.825, 42}, {3.829, 43}, {3.833, 44}, {3.836, 45}, {3.840, 46}, {3.843, 47}, {3.847, 48}, {3.850, 49}, {3.854, 50},
-    {3.857, 51}, {3.860, 52}, {3.863, 53}, {3.866, 54}, {3.870, 55}, {3.874, 56}, {3.879, 57}, {3.888, 58}, {3.893, 59}, {3.897, 60},
-    {3.902, 61}, {3.906, 62}, {3.911, 63}, {3.918, 64}, {3.923, 65}, {3.928, 66}, {3.939, 67}, {3.943, 68}, {3.949, 69}, {3.955, 70},
-    {3.961, 71}, {3.968, 72}, {3.974, 73}, {3.981, 74}, {3.987, 75}, {3.994, 76}, {4.001, 77}, {4.007, 78}, {4.014, 79}, {4.021, 80},
-    {4.029, 81}, {4.036, 82}, {4.044, 83}, {4.052, 84}, {4.062, 85}, {4.074, 86}, {4.085, 87}, {4.095, 88}, {4.105, 89}, {4.111, 90},
-    {4.116, 91}, {4.120, 92}, {4.125, 93}, {4.129, 94}, {4.135, 95}, {4.145, 96}, {4.176, 97}, {4.179, 98}, {4.193, 99}, {4.200,100},
+local rf2_curr_model_static_data = {
+    msp_api_version = nil,
+    craft_id = nil,
+    craft_name= nil,
+    cell_count = 4,
+    battery_capacity = nil,
 }
-
---- This function return the percentage remaining in a single Lipo cel
-local function getCellPercent(cellValue)
-    if cellValue == nil then
-        return 0
-    end
-
-    -- if voltage too low, return 0%
-    if cellValue <= percent_list_lipo[1][1] then
-        return 0
-    end
-
-    -- if voltage too high, return 100%
-    if cellValue >= percent_list_lipo[#percent_list_lipo][1] then
-        return 100
-    end
-
-    -- binary search
-    local l = 1
-    local u = #percent_list_lipo
-    while true do
-        local n = (u + l) // 2
-        if cellValue >= percent_list_lipo[n][1] and cellValue <= percent_list_lipo[n+1][1] then
-            -- return closest value
-            if cellValue < (percent_list_lipo[n][1] + percent_list_lipo[n + 1][1]) / 2 then
-                return percent_list_lipo[n][2]
-            else
-                return percent_list_lipo[n+1][2]
-            end
-        end
-        if cellValue < percent_list_lipo[n][1] then
-            u = n
-        else
-            l = n
-        end
-    end
-
-    return 0
-end
 
 --------------------------------------------------------------
 local function log(fmt, ...)
@@ -139,34 +102,34 @@ local function log(fmt, ...)
 end
 --------------------------------------------------------------
 
+local function rf2_curr_model_static_data_read()
+    -- update rf2_curr_model_static_data
+    rf2_curr_model_static_data.msp_api_version = rf2fc.msp.cache.mspApiVersion or nil
+    rf2_curr_model_static_data.craft_id         = nil -- mcu id, command=160, not implemented yet
+    rf2_curr_model_static_data.craft_name       = rf2fc.msp.cache.mspName or "---"
+    rf2_curr_model_static_data.cell_count       = rf2fc.msp.cache.mspBatteryConfig.batteryCellCount or -1
+    rf2_curr_model_static_data.battery_capacity = rf2fc.msp.cache.mspBatteryConfig.batteryCapacity or -1
+    rf2_curr_model_static_data.rescue_on        = rf2fc.msp.cache.mspRescueProfile.mode == 1
+    rf2_curr_model_static_data.total_flights    = rf2fc.msp.cache.mspFlightStats.stats_total_flights.value
+end
+
+
 -- better font size names
 local FS={FONT_38=XXLSIZE,FONT_16=DBLSIZE,FONT_12=MIDSIZE,FONT_8=0,FONT_6=SMLSIZE}
 
-
-local function tableToString(tbl)
-    if (tbl == nil) then return "---" end
-    local result = {}
-    for key, value in pairs(tbl) do
-        table.insert(result, string.format("%s: %s", tostring(key), tostring(value)))
-    end
-    return table.concat(result, ", ")
-end
-
-local function isFileExist(file_name)
-    rf2.log("is_file_exist()")
-    local hFile = io.open(file_name, "r")
-    if hFile == nil then
-        rf2.log("file not exist - %s", file_name)
-        return false
-    end
-    io.close(hFile)
-    rf2.log("file exist - %s", file_name)
-    return true
-end
+-- local function tableToString(tbl)
+--     if (tbl == nil) then return "---" end
+--     local result = {}
+--     for key, value in pairs(tbl) do
+--         table.insert(result, string.format("%s: %s", tostring(key), tostring(value)))
+--     end
+--     return table.concat(result, ", ")
+-- end
 
 -----------------------------------------------------------------------------------------------------------------
 
-local dbgx, dbgy = 100, 100
+dbg_layout_enabled = false
+dbgx, dbgy = 100, 100
 local function getDxByStick(stk)
     local v = getValue(stk)
     if math.abs(v) < 15 then return 0 end
@@ -174,6 +137,7 @@ local function getDxByStick(stk)
     return d
 end
 local function dbgLayout()
+    dbg_layout_enabled = true
     local dw = getDxByStick("ail")
     dbgx = dbgx + dw
     dbgx = math.max(0, math.min(480, dbgx))
@@ -235,7 +199,7 @@ local function formatTime(wgt, t1)
 end
 
 local build_ui = function(wgt, file_name)
-    local ui_lib = assert(loadScript(baseDir .. "/widgets/dashboards/" ..file_name))()
+    local ui_lib = assert(loadScript(baseDir .. "/widgets/dashboards/" ..file_name, "btd"))()
     ui_lib.build_ui(wgt)
 end
 
@@ -254,21 +218,20 @@ local function updateCraftName(wgt)
     local is_dbg_craft_change = false
 
     if is_dbg_craft_change == true then
-        if (rf2.clock() - replImg > 5) then
-            rf2.log("updateCraftName - interval")
+        if (m_clock() - replImg > 5) then
+            log("updateCraftName - interval")
             imgTp = imgTp + 1
             if imgTp % 2 == 0 then
                 wgt.values.craft_name = "sab601"
             else
                 wgt.values.craft_name = "sab588"
             end
-            rf2.log("updateCraftName - newCraftName: %s", wgt.values.craft_name)
-            replImg = rf2.clock()
+            log("updateCraftName - newCraftName: %s", wgt.values.craft_name)
+            replImg = m_clock()
         end
     else
-        wgt.values.craft_name = wgt.mspTool.craftName()
+        wgt.values.craft_name = rf2_curr_model_static_data.craft_name
     end
-
 end
 
 local function updateTimeCount(wgt)
@@ -278,35 +241,35 @@ local function updateTimeCount(wgt)
 end
 
 local function updateRpm(wgt)
-    local val     = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.rpm)
-    -- local rpm_max = rf2.tlmEngine.getValueMax(rf2.tlmEngine.sensorTable.rpm)
+    local val = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.rpm)
+    -- local rpm_max = wgt.tlmEngine.valueMax(wgt.tlmEngine.sensorTable.rpm)
     wgt.values.rpm = val
     wgt.values.rpm_str = string.format("%s",val)
 end
 
 local function updateProfiles(wgt)
     -- Current PID profile
-    local val = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.pid_profile)
+    local val = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.pid_profile)
     wgt.values.profile_id = val
     wgt.values.profile_id_str = string.format("%s", wgt.values.profile_id)
 
     -- Current Rate profile
-    local val = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.rate_profile)
+    local val = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.rate_profile)
     wgt.values.rate_id = val
     wgt.values.rate_id_str = string.format("%s", wgt.values.rate_id)
 end
 
 local function updateCell(wgt)
-    -- local batPercent = getValue("Bat%")
-    local vbat     = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.batt_voltage)
-    local vbat_min = rf2.tlmEngine.getValueMax(rf2.tlmEngine.sensorTable.batt_voltage)
+    local vbat     = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.batt_voltage)
+    local vbat_min = wgt.tlmEngine.valueMin(wgt.tlmEngine.sensorTable.batt_voltage)
 
-    local cell_count = rf2fc.msp.cache.mspBatteryConfig.batteryCellCount or -1
+    -- local cell_count = rf2fc.msp.cache.mspBatteryConfig.batteryCellCount or -1
+    local cell_count = rf2_curr_model_static_data.cell_count or 1
 
     local vcel = cell_count > 0 and (vbat / cell_count) or 0
     local vcel_min = cell_count > 0 and (vbat_min / cell_count) or 0
 
-    local batPercent = getCellPercent(vcel)
+    local batPercent = wgt.tools.getCellPercent(vcel)
     -- log("vbat: %s, vcel: %s, BatPercent: %s", vbat, vcel, batPercent)
 
     wgt.values.vbat = vbat
@@ -318,8 +281,8 @@ end
 
 local function updateCurr(wgt)
     local curr_top = wgt.options.currTop
-    local val     = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.current)
-    local val_max = rf2.tlmEngine.getValueMax(rf2.tlmEngine.sensorTable.current)
+    local val     = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.current)
+    local val_max = wgt.tlmEngine.valueMax(wgt.tlmEngine.sensorTable.current)
     -- log("telemetery8: updateCurr:  curr: %s, curr_max: %s", curr, curr_max)
 
     wgt.values.curr = val
@@ -332,10 +295,11 @@ end
 
 local function updateCapa(wgt)
     -- capacity
-    -- local val     = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.capa)
-    local val_max = rf2.tlmEngine.getValueMax(rf2.tlmEngine.sensorTable.capa)
+    -- local val  = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.capa)
+    local val_max = wgt.tlmEngine.valueMax(wgt.tlmEngine.sensorTable.capa)
 
-    wgt.values.capaTotal = rf2fc.msp.cache.mspBatteryConfig.batteryCapacity or -1
+    -- wgt.values.capaTotal = rf2fc.msp.cache.mspBatteryConfig.batteryCapacity or -1
+    wgt.values.capaTotal = rf2_curr_model_static_data.battery_capacity
     wgt.values.capaUsed = val_max
 
     if wgt.values.capaTotal == nil or wgt.values.capaTotal == nan or wgt.values.capaTotal ==0 then
@@ -360,32 +324,33 @@ local function updateCapa(wgt)
     wgt.values.capaPercent_txt = string.format("%d%%", wgt.values.capaPercent)
 end
 
--- local function updateGovernor(wgt)
---     if wgt.mspTool.governorEnabled() then
---         wgt.values.governor_str = string.format("%s", wgt.mspTool.governorMode())
---     else
---         wgt.values.governor_str = "OFF"
---     end
--- end
+local function updateBecVoltage(wgt)
+    local vbec     = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.bec_voltage)
+    local vbec_min = wgt.tlmEngine.valueMin(wgt.tlmEngine.sensorTable.bec_voltage)
+    -- log("updateBecVoltage:  vbec: %s, vbec_min: %s", vbec, vbec_min)
 
-local function updateBB(wgt)
-    wgt.values.bb_enabled = wgt.mspTool.blackboxEnable()
-
-    if wgt.values.bb_enabled then
-        local blackboxInfo = wgt.mspTool.blackboxSize()
-        if blackboxInfo.totalSize > 0 then
-            wgt.values.bb_percent = math.floor(100*(blackboxInfo.usedSize/blackboxInfo.totalSize))
-        end
-        wgt.values.bb_size = math.floor(blackboxInfo.totalSize/ 1000000)
-        wgt.values.bb_txt = string.format("Blackbox: %s mb", wgt.values.bb_size)
-    end
-    wgt.values.bbColor = (wgt.values.bb_percent < 90) and lcd.RGB(0x00963A) or RED -- lcd.RGB(0x00963A) ~ GREEN
-    -- log("bb_percent: %s", wgt.values.bb_percent)
-    -- log("bb_size: %s", wgt.values.bb_size)
+    wgt.values.vbec = vbec
+    wgt.values.vbec_min = vbec_min
 end
 
+-- local function updateBB(wgt)
+--     wgt.values.bb_enabled = wgt.mspTool.blackboxEnable()
+
+--     if wgt.values.bb_enabled then
+--         local blackboxInfo = wgt.mspTool.blackboxSize()
+--         if blackboxInfo.totalSize > 0 then
+--             wgt.values.bb_percent = math.floor(100*(blackboxInfo.usedSize/blackboxInfo.totalSize))
+--         end
+--         wgt.values.bb_size = math.floor(blackboxInfo.totalSize/ 1000000)
+--         wgt.values.bb_txt = string.format("Blackbox: %s mb", wgt.values.bb_size)
+--     end
+--     wgt.values.bbColor = (wgt.values.bb_percent < 90) and lcd.RGB(0x00963A) or RED -- lcd.RGB(0x00963A) ~ GREEN
+--     -- log("bb_percent: %s", wgt.values.bb_percent)
+--     -- log("bb_size: %s", wgt.values.bb_size)
+-- end
+
 local function updateRescue(wgt)
-    wgt.values.rescue_on = rf2fc.msp.cache.mspRescueProfile.mode == 1
+    wgt.values.rescue_on = rf2_curr_model_static_data.rescue_on
 
     -- rescue enabled?
     wgt.values.rescue_txt = wgt.values.rescue_on and "ON" or "OFF"
@@ -395,9 +360,22 @@ local function updateRescue(wgt)
     -- -- end
 end
 
-local  function updateArm(wgt)
+local function updateModelStats(wgt)
+    wgt.values.model_total_flights = rf2_curr_model_static_data.total_flights -- or nil
+    -- log("[updateFlightStat] Total flights: [%s]", wgt.values.model_total_flights)
+    wgt.values.model_total_time = rf2fc.msp.cache.mspFlightStats.stats_total_time_s.value or 0
+    wgt.values.model_total_time_str = formatTime(wgt, {value=wgt.values.model_total_time//60})
+
+end
+
+local function updateArm1(wgt)
+    wgt.values.flight_stage     = wgt.task_flight_stage.getFlightStage()
+    wgt.values.flight_stage_str = wgt.task_flight_stage.getFlightStageStr()
+end
+
+local function updateArm2(wgt)
     wgt.values.is_arm = wgt.mspTool.isArmed()
-    -- log("isArmed %s:", wgt.values.is_arm)
+    log("isArmed %s:", wgt.values.is_arm)
     local flagList = wgt.mspTool.armingDisableFlagsList()
     wgt.values.arm_disable_flags_list = flagList
     wgt.values.arm_disable_flags_txt = ""
@@ -417,20 +395,19 @@ local  function updateArm(wgt)
 
         end
     end
-
 end
 
 local function updateThr(wgt)
-    local val     = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.throttle_percent)
-    local val_max = rf2.tlmEngine.getValueMax(rf2.tlmEngine.sensorTable.throttle_percent)
+    local val     = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.throttle_percent)
+    local val_max = wgt.tlmEngine.valueMax(wgt.tlmEngine.sensorTable.throttle_percent)
     wgt.values.thr = val
     wgt.values.thr_max = val_max
 end
 
 local function updateTemperature(wgt)
     local tempTop = wgt.options.tempTop
-    local val = rf2.tlmEngine.getValue(rf2.tlmEngine.sensorTable.temp_esc)
-    local val_max = rf2.tlmEngine.getValueMax(rf2.tlmEngine.sensorTable.temp_esc)
+    local val = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.temp_esc)
+    local val_max = wgt.tlmEngine.valueMax(wgt.tlmEngine.sensorTable.temp_esc)
     wgt.values.EscT = val
     wgt.values.EscT_max = val_max
 
@@ -442,46 +419,46 @@ local function updateTemperature(wgt)
 end
 
 local function updateELRS(wgt)
-    wgt.values.rqly = getValue("RQly")
-    if (wgt.values.rqly <= 0) then
-        wgt.values.rqly = getValue("VFR")
-    end
-    local rqly_min = getValue("RQly-")
-    if (rqly_min <= 0) then
-        rqly_min = getValue("VFR-")
-    end
+    wgt.values.link_rqly         = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.link_rqly)
+    wgt.values.link_rqly_min     = wgt.tlmEngine.valueMin(wgt.tlmEngine.sensorTable.link_rqly)
+    wgt.values.link_tx_power     = wgt.tlmEngine.value(wgt.tlmEngine.sensorTable.link_tx_power)
+    wgt.values.link_tx_power_max = wgt.tlmEngine.valueMax(wgt.tlmEngine.sensorTable.link_tx_power)
 
-    if rqly_min > 0 then
-        wgt.values.rqly_min = rqly_min
-    end
-    wgt.values.rqly_str = string.format("%d%%", wgt.values.rqly)
-    wgt.values.rqly_min_str = string.format("%d%%", wgt.values.rqly_min)
+
+    -- wgt.values.link_rqly_str     = string.format("%d%%", wgt.values.link_rqly)
+    -- wgt.values.link_rqly_min_str = string.format("%d%%", wgt.values.link_rqly_min)
+    -- wgt.values.tx_power_str = string.format("%d%%mw", wgt.values.link_tx_power)
+    -- wgt.values.tx_power_max_str = string.format("%d%%mw", wgt.values.link_tx_power_max)
 end
 
-
-
 local function updateImage(wgt)
-    local newCraftName = wgt.values.craft_name
-    if newCraftName == wgt.values.img_craft_name_for_image then
+    local newCraftName = wgt.values.craft_name .. ".png"
+    local modleCraftName = model.getInfo().bitmap
+    -- log("updateImage - current craft name: %s ?= %s", newCraftName, wgt.values.img_craft_name_for_image)
+    if wgt.values.img_craft_name_for_image==newCraftName or wgt.values.img_craft_name_for_image==modleCraftName then
         -- log("updateImage - craft name not changed")
         return
     end
-    -- log("updateImage - craft name changed --> newCraftName: %s, img_craft_name_for_image: %s", wgt.values.craft_name, wgt.values.img_craft_name_for_image)
+    log("updateImage - craft name changed --> newCraftName: %s, img_craft_name_for_image: %s", wgt.values.craft_name, wgt.values.img_craft_name_for_image)
 
-    local filename = "/IMAGES/"..newCraftName..".png"
+    local filename = "/IMAGES/"..newCraftName
     log("updateImage - is-exist image: %s", filename)
-    if isFileExist(filename) ==false then
-        filename = "/IMAGES/".. model.getInfo().bitmap
-        if filename == "" or isFileExist(filename) ==false then
+    if wgt.tools.isFileExist(filename) ==false then
+        log("updateImage - not exist: %s", filename)
+        log("updateImage - is exit org model image: %s", modleCraftName)
+        filename = "/IMAGES/"..modleCraftName
+        if modleCraftName == "" or wgt.tools.isFileExist(filename) ==false then
             filename = baseDir.."widgets/img/rf2_logo.png"
         end
     end
 
+    log("updateImage - 111 %s ?= %s", wgt.values.img_last_name, filename)
     if filename ~= wgt.values.img_last_name then
-        log("updateImage - model changed, %s --> %s", wgt.values.img_last_name, filename)
+        log("updateImage - 222 model changed, %s --> %s", wgt.values.img_last_name, filename)
         wgt.values.img_last_name = filename
-        wgt.values.img_craft_name_for_image = newCraftName
+        -- wgt.values.img_craft_name_for_image = newCraftName
     end
+    wgt.values.img_craft_name_for_image = newCraftName
 end
 
 local function updateOnNoConnection()
@@ -496,6 +473,19 @@ local function update(wgt, options)
     if (wgt == nil) then return end
     wgt.options = options
     wgt.not_connected_error = "Not connected"
+
+    wgt.tools = assert(loadScript(baseDir .. "/widgets/lib_widget_tools.lua", "btd"))(nil, app_name)
+
+    wgt.tlmEngine = loadScript(baseDir .. "/widgets/telemetry_engine.lua", "btd")(runningInSimulator, app_name, log)
+    log("x-telemetery tlmTask: %s", wgt.tlmEngine)
+    wgt.tlmEngine.init()
+
+    wgt.task_capa_audio = loadScript(baseDir .. "/widgets/tasks/task_capa_audio.lua", "btd")(baseDir, log, app_name)
+    wgt.task_capa_audio.init()
+
+    wgt.task_flight_stage = loadScript(baseDir .. "/widgets/tasks/task_flight_stage.lua", "btd")(baseDir, log, app_name)
+    wgt.task_flight_stage.init()
+
 
     log("isFullscreen: %s", lvgl.isFullScreen())
     log("isAppMode: %s", lvgl.isAppMode())
@@ -517,18 +507,23 @@ end
 
 local function background(wgt)
 
-    if rf2.tlmEngine then
+    if wgt.tlmEngine then
         updateTimeCount(wgt)
         updateRpm(wgt)
         updateProfiles(wgt)
         updateCell(wgt)
         updateCurr(wgt)
         updateCapa(wgt)
+        updateBecVoltage(wgt)
         updateThr(wgt)
         updateTemperature(wgt)
         updateImage(wgt)
         updateELRS(wgt)
+        updateArm1(wgt)
     end
+
+    wgt.task_capa_audio.run(wgt)
+    wgt.task_flight_stage.run(wgt)
 
     wgt.is_connected = false
     wgt.not_connected_error = "no RF2_Server widget found"
@@ -539,7 +534,7 @@ local function background(wgt)
         if rf2fc.mspCacheTools ~= nil then
             wgt.is_connected, wgt.not_connected_error = rf2fc.mspCacheTools.isCacheAvailable()
             if wgt.is_connected==false then
-                log("Not connected---")
+                -- log("Not connected---")
                 updateOnNoConnection()
                 return
             end
@@ -547,12 +542,18 @@ local function background(wgt)
     end
     wgt.mspTool = rf2fc.mspCacheTools
 
+    --------------------------------------------------------------------------------
+    -- update rf2_curr_model_static_data
+    rf2_curr_model_static_data_read()
+    --------------------------------------------------------------------------------
+
+
     updateCraftName(wgt)
     -- updateGovernor(wgt)
-    updateBB(wgt) -- ???
+    -- updateBB(wgt) -- ???
     updateRescue(wgt) --???
-    updateArm(wgt)
-
+    updateArm2(wgt)
+    updateModelStats(wgt)
 end
 
 local function refresh(wgt, event, touchState)
@@ -560,7 +561,7 @@ local function refresh(wgt, event, touchState)
 
     background(wgt)
 
-   dbgLayout()
+--    dbgLayout()
 end
 
 return {create=create, update=update, background=background, refresh=refresh}

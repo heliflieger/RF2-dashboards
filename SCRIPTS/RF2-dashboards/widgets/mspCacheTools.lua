@@ -9,13 +9,16 @@ function M.craftName()   return rf2fc.msp.cache.mspName or "---" end
 -- end
 -- function M.governorEnabled() return M.governorMode() ~= "OFF" end
 
-function M.blackboxEnable() return rf2fc.msp.cache.mspDataflash.ready==true and rf2fc.msp.cache.mspDataflash.supported==true end
-function M.blackboxSize()
-    if rf2fc.msp.cache.mspDataflash.ready ~= true then
-        return { enabled=false, totalSize=0, usedSize=0, freeSize=0 }
-    end
-    return { enabled=M.blackboxEnable(), totalSize= rf2fc.msp.cache.mspDataflash.totalSize, usedSize= rf2fc.msp.cache.mspDataflash.usedSize, freeSize= rf2fc.msp.cache.mspDataflash.totalSize - rf2fc.msp.cache.mspDataflash.usedSize }
-end
+-- function M.blackboxEnable()
+--     return rf2fc.msp.cache.mspDataflash.ready==true and rf2fc.msp.cache.mspDataflash.supported==true
+-- end
+
+-- function M.blackboxSize()
+--     if rf2fc.msp.cache.mspDataflash.ready ~= true then
+--         return { enabled=false, totalSize=0, usedSize=0, freeSize=0 }
+--     end
+--     return { enabled=M.blackboxEnable(), totalSize= rf2fc.msp.cache.mspDataflash.totalSize, usedSize= rf2fc.msp.cache.mspDataflash.usedSize, freeSize= rf2fc.msp.cache.mspDataflash.totalSize - rf2fc.msp.cache.mspDataflash.usedSize }
+-- end
 
 function M.isCacheAvailable()
     if rf2fc == nil or rf2fc.msp == nil or rf2fc.msp.cache == nil then

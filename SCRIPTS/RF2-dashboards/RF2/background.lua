@@ -49,7 +49,6 @@ local function run()
         if initTaskResult.crsfCustomTelemetryEnabled then
             local requestedSensorsBySid = rf2.executeScript("rf2tlm_sensors.lua", initTaskResult.crsfCustomTelemetrySensors)
             customTelemetryTask = rf2.executeScript("rf2tlm", requestedSensorsBySid)
-
         end
         if initTask.useAdjustmentTeller then
             adjTellerTask = rf2.executeScript("adj_teller")
@@ -63,7 +62,7 @@ local function run()
         return 0
     end
 
-    rf2.log("adjTellerTask: %s", tostring(adjTellerTask))
+    -- rf2.log("adjTellerTask: %s", tostring(adjTellerTask))
     if adjTellerTask and adjTellerTask.run() == 2  then
         -- no adjustment sensors found
         rf2.log("adjTellerTask: no adjustment sensors found ---------------------------------")

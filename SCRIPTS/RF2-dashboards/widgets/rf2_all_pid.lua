@@ -1,6 +1,6 @@
 local app_name = "rf2_pids_list"
 
-local baseDir = "/SCRIPTS/RF2-dashboards/"
+-- local baseDir = "/SCRIPTS/RF2-dashboards/"
 local build_gui
 
 
