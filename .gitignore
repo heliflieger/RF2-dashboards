@@ -40,3 +40,8 @@ luac.out
 *.hex
 
 *.luac
+.idea/.gitignore
+.idea/misc.xml
+.idea/modules.xml
+.idea/*.iml
+.idea/vcs.xml
