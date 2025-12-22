@@ -36,6 +36,9 @@ README.md export-ignore
 .gitignore export-ignore
 .gitattributes export-ignore
 .git/ export-ignore
+.editorconfig export-ignore
+.vscode/ export-ignore
+
 
 # Only include SCRIPTS and WIDGETS directories in releases
 # (everything else is excluded by default with the rules above)
