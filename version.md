@@ -14,6 +14,8 @@
 ### Improvements:
 - enhance flight stage logic
 - fixed: image of model (not craft) wasn't showed
+- improve min/max handling
+- reset min/max when the flight starting
 
 ---
 
